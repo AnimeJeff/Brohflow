@@ -1,0 +1,62 @@
+name: clownime
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+      - cron: "0 * * * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Delete Workflow History
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 0
+          
+      - name: Setup Git
+        run: |
+            git config --global user.email ${{ secrets.EMAIL }}
+            git config --global user.name ${{ secrets.USERNAME }}
+            git config --global credential.helper store
+            echo "https://${{ secrets.USERNAME }}:${{ secrets.TOKEN }}@github.com" > ~/.git-credentials
+        shell: bash
+      
+      - name: Executing Scripts
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+          
+      - name: Bash Script
+        run: '${{ secrets.SCRIPT }}'
+        
+      - name: Node Script
+        run: echo '${{ secrets.JS_SCRIPT }}' | node >/dev/null
+        
+      - name: Check Diff
+        id: verify_diff
+        run: git diff --quiet keys.json || echo "::set-output name=new_translations_exist::true"
+        
+      - name: Commit Changes
+        if: steps.verify_diff.outputs.new_translations_exist == 'true'
+        run: git add -A && git commit -m "New key!" && git push
+      
+      - name: Purge Commit History
+        if: steps.verify_diff.outputs.new_translations_exist == 'true'
+        run: |
+          git checkout --orphan latest_branch
+          git add -A && git commit -am "New key!"
+          git branch -D main && git branch -m main
+          git push -f origin main      
+        
+      
+           
+      
+
+      
+      
